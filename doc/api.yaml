@@ -1,0 +1,543 @@
+
+
+openapi: 3.0.3
+info:
+  title: WASAText
+  version: '1.0'
+  description: "questo descrive L'API per l'applicazione WASATesxt che
+    consente di chattare con le persone o gruppi di persone"
+servers:
+  - url: http://localhost:3000
+
+
+
+
+
+#...
+components:
+  schemas:
+    message:
+      title: message
+      description: "this object rapresent a single message of a user"
+      type: object
+      properties:
+
+        id:
+          description: Unique message identifier.
+          type: integer
+          example: 1
+          readOnly: true
+
+        state:
+          description: |-
+            describe the state of message  sent or delivered
+            note: delivered meaning the recipient has read the message
+          type: string
+          nullable: True #in case you send the message the state will be null until it's recieved
+          enum: ["sent","delivered"]
+          example: "sent"
+        
+        sentAt:
+          description: "the timestamp when the message was sent"
+          type: string
+          format: date-time
+          example: "2005-05-00:00:00"
+          readOnly: true
+
+        #nota: implementare che non possa essere inviato un messaggio con
+        #      content: null e imageurl:null deve comparire per forza una o l'altro
+        content:
+          description: |-
+            Content of the message like strings frases paragraphs with or without
+            emojis or special characters it can be even links for a website
+          nullable: true
+          type: string
+          example: "Nice pasta bro 🍝"
+
+
+        reply:
+          description: |-
+            a reply to a message in a chat and contains the mesage Identifier
+            of the replied message note: will become null if the replied message 
+            is deleted
+          nullable: true
+          type: integer
+          example: 30
+
+        forwarded:
+          description: indicates if the message is forwarded or not
+          type: boolean
+          example: False
+          
+        username:
+          description: |-
+            the name of the user who sent the message 
+            in case of a group conversation
+          type: string
+          nullable: true
+          example: "Emanuele Panizzi"
+        
+
+
+    image:
+      type: string
+      format: binary
+      description: an image 
+      example: 'ab9fed582aba...'
+
+      
+    imageid:
+      description: |-
+        the photo of the user or the group chat or a photo message
+        it will give the url then another get request will be made to
+        acquire this photo using the url
+      type: string
+      example: "/user/profile-photo"    
+
+
+    reaction:
+      nullable: true
+      description: emoji used in reaction
+      type: string
+      example: "💻"
+
+
+
+
+
+
+
+
+    Conversation:
+      title: Conversation
+      description: Rapresent a single conversation 
+      type: object
+
+      properties:
+        Id:
+          description: a unique identifier for a conversation
+          type: integer
+          example: 45
+
+        name:
+          description: |-
+            the name of the user you are having a conversation or the name
+            of the group chat 
+          type: string
+          example: "Emanuele Panizzi"
+
+
+        snippet:
+          description: |-
+            it will be a string rapresenting what the newest message of this
+            conversation says, it will be replaced with an icon
+            if it has an photo
+          type: string
+          example: "Nice pasta"
+
+        icon:
+          description: |-
+            if the newest message of a conversation contains a image then in the frontend will 
+            be assigned an icon which rapresents a image
+          type: boolean
+          example: false
+
+        sentAt:
+          description: the timestamp when the newest message was sent
+          type: string
+          format: date-time
+          example: "2005-05-00:00:00"
+          readOnly: true
+
+
+    name:
+      description: a new username 
+      type: string
+      example: "Emanuele Panizzi"
+
+    userId:
+      description: Unique user identifier.
+      type: integer
+      example: 1
+      readOnly: true
+
+    conversationId:
+      description: Unique conversation identifier.
+      type: integer
+      example: 1
+      readOnly: true
+
+  parameters:
+    userId:
+      schema:
+        type: integer
+        description: the integer that identifies a specific user
+        example: 1234
+      name: userId
+      in: path
+      required: true
+      description: this is the user identifier
+
+    conversationId:
+      schema:
+        type: integer
+        description: the integer that identifies a specific conversation
+        example: 1234
+      name: Conversationid
+      in: path
+      required: true
+      description: this is the conversation identifier
+
+    messageId:
+      schema:
+        type: integer
+        description: the integer that identifies a specific message
+        example: 1234
+      name: messageId
+      in: path
+      required: true
+      description: this is the message identifier
+
+paths:
+
+
+
+  /session:
+    post:
+      tags: ["login"]
+      summary: Logs in the user
+      description: |-
+        If the user does not exist, it will be created,
+        and an identifier is returned.
+        If the user exists, the user identifier is returned.
+      operationId: doLogin
+      requestBody:
+        description: User details
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Maria
+                  pattern: 'ˆ.*?$'
+                  minLength: 3
+                  maxLength: 16
+        required: true
+      responses:
+        '201':
+            description: User log-in action successful
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    identifier:
+                      # change here if you decide to use an integer
+                      # or any other type of identifier
+                      type: integer
+                      example: 30
+
+
+  /users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/userId"
+
+
+
+    put:
+      operationId: setMyUserName
+      summary: update the name of this specific user
+      description: replaces username with a new one
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/name"}
+      responses:
+        "200":
+          description: name changed succesfully
+        "404":
+          description: user not found
+
+  
+    get:
+      operationId: getMyConversation
+      summary: get the list of conversation of a specific user
+      description: returns all conversation still active of the user with their 
+        name and last sent message (a string or an icon if a photo message)
+      responses:
+        "200":
+          description: here is the list of all conversation sorted from newest to oldest
+          content:
+            application/json:
+              schema:
+                type: array
+                items: 
+                  type: object
+                  properties:
+                    Conversation:
+                      $ref: "#/components/schemas/Conversation"
+                    image:
+                      $ref: "#/components/schemas/imageid"
+        "404":
+          description: user not found
+
+  /conversation/{conversationId}:
+    parameters:
+      - $ref: "#/components/parameters/conversationId"
+
+    get:
+      operationId: getConversation
+      summary: get a list of message sorted from newest to oldest of a specific conversation
+      description: |-
+        returns a list of message sorted from newest to oldest with their content and 
+        url of the photo if a photo image  
+      responses:
+        "200":
+          description: here is the list of all message sorted from newest to oldest
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    message:  
+                      $ref: "#/components/schemas/message"
+                    reaction:
+                      $ref: "#/components/schemas/reaction"
+                    image:
+                      $ref: "#/components/schemas/imageid"
+                    userId:
+                      $ref: "#/components/schemas/name"
+        "403":
+          description: |-
+            the client is trying to access a conversation he/she
+            isn't a part of
+
+        "404":
+          description: conversation not found
+
+    post:
+      operationId: sendMessage
+      summary: send a message or photo message
+      description:  |- 
+        sends a message to the destinated one to one chat or group chat.
+        the server will then create a new unique identifier for this message
+        and if a photo message will locate it using url created which it stores 
+        the photo.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                message:
+                  $ref: "#/components/schemas/message"
+                image:
+                  $ref: "#/components/schemas/image"
+
+      responses:
+        "200":
+          description: |-
+            message sent the list of conversation
+            will update with the new message (when we see "200" 
+            response the message sent will appear in the chat)
+        "403":
+          description: |-
+            the client is trying to post a message to a conversation
+            he/she isn't apart of
+        "404":
+          description: conversation not found
+
+  /messages/{messageId}/forward:
+    parameters:
+      - $ref: "#/components/parameters/messageId"
+
+        
+    post:
+      operationId: forwardMessage
+      summary: forward an existing message
+      description: |-
+        using the id of the message it forwards its content or photo
+        to the conversations in the list
+      requestBody:
+        content:
+          application/json:
+            schema: 
+              type: array
+              items:
+                $ref: "#/components/schemas/conversationId"
+
+
+      responses:
+        "200":
+          description: the message has been forwarded successfully
+        "403":
+          description: |-
+            the client is trying to post a message to a conversation
+            he/she isn't apart of
+        "404":
+          description: conversation or message not found
+
+
+
+  /messages/{messageId}/react:
+    parameters:
+    - $ref: "#/components/parameters/messageId"
+  
+    post:
+      operationId: commentMessage
+      summary: react to a message
+      description: |-
+        using the id of the message it identifies it and associate
+        it with an reaction 
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reaction:
+                  $ref: "#/components/schemas/reaction"
+                userId:
+                  $ref: "#/components/schemas/userId"
+      responses:
+        "200":
+          description: reaction succesfully added
+        "404":
+          description: message not found
+
+
+    delete:
+      operationId: uncommentMessage
+      summary: remove reaction to a message
+      description: |-
+        using the id of the message it and whatever
+        the user reaction was it removes it's
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/userId"}
+
+      responses:
+        "200":
+          description: the reaction to this message has been deleted
+        "404":
+          description: message not found
+
+        
+  /conversation/{conversationId}/group:
+    parameters:
+      - $ref: "#/components/parameters/conversationId"
+
+  
+    
+    post:
+      operationId: addToGroup
+      summary: add a user to a group
+      description: |-
+        using the id of the group a user can add to it a 
+        list of user
+      requestBody:
+        content:
+          application/json:
+            schema: 
+              type: array
+              items:
+                $ref: "#/components/schemas/userId"
+                      
+
+      responses:
+        "200":
+          description: the users has been added succesfully
+        "404":
+          description: user not found
+        
+
+    delete:
+      operationId: leaveGroup
+      summary: leave from an existing group which the user is a part of
+      description: |-
+        using the id of the conversation it identifies it and remove
+        the user from that group
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/userId"}
+
+      responses:
+        "200":
+          description: left the group succesfully
+
+
+    put:
+      operationId: setGroupName
+      summary: update the name of this specific group conversation
+      description: replaces the name of the group with a new one
+      requestBody:
+        content:
+          application/json:
+            schema: 
+              type: object
+              properties:
+                name:
+                  $ref: "#/components/schemas/name"
+                user:
+                  $ref: "#/components/schemas/userId"
+      responses:
+        "200":
+          description: name changed succesfully
+        "403":
+          description:  the user isn't a part of this conversation
+
+  /users/{userId}/photo:
+    parameters:
+      - $ref: "#/components/parameters/userId"
+
+    put:
+      operationId:  setMyPhoto
+      summary: update the user profile photo
+      description: sending a new immage the user updates his photo with a new one
+      requestBody:
+        content:
+          multipart/form-data:
+            schema: {$ref: "#/components/schemas/image"}
+      responses:
+        "200":
+          description: photo changed succesfully
+        "400":
+          description:  invalid input, missing file or incorrect format (like for example .pdf)
+
+
+  /conversation/{conversationId}/group/photo:
+    parameters:
+      - $ref: "#/components/parameters/conversationId"
+
+
+    put:
+      operationId:  setGroupPhoto
+      summary: update the group conversation profile photo
+      description: sending a new immage the user updates the group photo with a new one
+      requestBody:
+        content:
+          multipart/form-data:
+            schema: {$ref: "#/components/schemas/image"}
+      responses:
+        "200":
+          description: photo changed succesfully
+        "400":
+          description:  invalid input, missing file or incorrect format (like for example .pdf)
+        "403":
+          description:  the user isn't a part of this conversation
+
+
+    
+
+
+
+
+
+
+  
