@@ -10,6 +10,23 @@ info:
 servers:
   - url: http://localhost:3000
 
+security:
+  - bearerAuth: []
+
+tags:
+  - name: login
+    description: "Endpoints related to user authentication."
+  - name: user
+    description: "Endpoints for managing the authenticated user's profile."
+  - name: users
+    description: "Endpoints for user search."
+  - name: conversations
+    description: "Endpoints for managing conversations and messages."
+  - name: messages
+    description: "Endpoints for specific message actions."
+  - name: groups
+    description: "Endpoints for group management."
+
 paths:
   /session:
     post:
@@ -29,6 +46,7 @@ paths:
                   example: Maria
                   minLength: 3
                   maxLength: 16
+                  pattern: "^[a-zA-Z0-9_-]{3,16}$"
               required:
                 - name
       responses:
@@ -62,6 +80,7 @@ paths:
       responses:
         "200":
           description: Name changed successfully
+          content: {}
         "409":
           description: New name is already in use
         "401":
@@ -82,9 +101,12 @@ paths:
                   type: string
                   format: binary
                   description: New profile image
+              required:
+                - image
       responses:
         "200":
           description: Photo changed successfully
+          content: {}
         "400":
           description: Invalid input, missing file or incorrect format
         "401":
@@ -101,6 +123,8 @@ paths:
           name: name
           schema:
             type: string
+            minLength: 1
+            maxLength: 50
           required: true
           description: The username to search for.
       responses:
@@ -110,6 +134,7 @@ paths:
             application/json:
               schema:
                 type: array
+                minItems: 0
                 items:
                   $ref: "#/components/schemas/User"
 
@@ -126,6 +151,7 @@ paths:
             application/json:
               schema:
                 type: array
+                minItems: 0
                 items:
                   $ref: "#/components/schemas/Conversation"
         "401":
@@ -148,8 +174,17 @@ paths:
       responses:
         "201":
           description: Conversation started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversationId:
+                    $ref: "#/components/schemas/Id"
         "404":
           description: User not found
+        "401":
+          description: Unauthorized
 
   /conversations/{conversationId}:
     parameters:
@@ -166,6 +201,7 @@ paths:
             application/json:
               schema:
                 type: array
+                minItems: 0
                 items:
                   $ref: "#/components/schemas/Message"
         "403":
@@ -187,6 +223,8 @@ paths:
                 content:
                   type: string
                   description: Text content of the message.
+                  minLength: 1
+                  maxLength: 2000
                 image:
                   type: string
                   format: binary
@@ -197,9 +235,14 @@ paths:
                 forwarded:
                   type: boolean
                   description: Indicates if the message is forwarded.
+              # Aggiunta la validazione per assicurare che almeno una proprietà sia presente
+              oneOf:
+                - required: [content]
+                - required: [image]
       responses:
         "200":
           description: Message sent successfully
+          content: {}
         "403":
           description: The user is not part of this conversation
         "404":
@@ -217,6 +260,7 @@ paths:
       responses:
         "200":
           description: Message deleted successfully
+          content: {}
         "403":
           description: User is not the sender of the message
         "404":
@@ -241,12 +285,15 @@ paths:
                   type: array
                   items:
                     $ref: "#/components/schemas/Id"
+                  minItems: 1
+                  maxItems: 50
                   description: List of conversation IDs to forward the message to.
               required:
                 - conversationIds
       responses:
         "200":
           description: Message forwarded successfully
+          content: {}
         "403":
           description: User is not authorized to forward to one or more conversations
         "404":
@@ -274,6 +321,7 @@ paths:
       responses:
         "200":
           description: Reaction added successfully
+          content: {}
         "404":
           description: Message not found
         "401":
@@ -286,6 +334,7 @@ paths:
       responses:
         "200":
           description: Reaction removed successfully
+          content: {}
         "404":
           description: Reaction or message not found
         "401":
@@ -309,12 +358,22 @@ paths:
                   type: array
                   items:
                     $ref: "#/components/schemas/Id"
+                  minItems: 1
+                  maxItems: 50
+                  description: List of user IDs to add to the group.
               required:
                 - name
                 - memberIds
       responses:
         "201":
           description: Group created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groupId:
+                    $ref: "#/components/schemas/Id"
 
   /groups/{groupId}/name:
     parameters:
@@ -336,6 +395,7 @@ paths:
       responses:
         "200":
           description: Name changed successfully
+          content: {}
         "403":
           description: User is not a member of the group
         "404":
@@ -358,9 +418,12 @@ paths:
                   type: string
                   format: binary
                   description: New group photo.
+              required:
+                - image
       responses:
         "200":
           description: Photo changed successfully
+          content: {}
         "400":
           description: Invalid input, missing file or incorrect format
         "403":
@@ -385,12 +448,15 @@ paths:
                   type: array
                   items:
                     $ref: "#/components/schemas/Id"
+                  minItems: 1
+                  maxItems: 50
                   description: List of user IDs to add to the group.
               required:
                 - userIds
       responses:
         "200":
           description: Users added successfully
+          content: {}
         "403":
           description: User is not a member of the group
         "404":
@@ -407,6 +473,7 @@ paths:
       responses:
         "200":
           description: User left the group successfully
+          content: {}
         "404":
           description: Group or user not found
         "403":
@@ -422,6 +489,8 @@ components:
       description: A new username or group name.
       type: string
       example: "Emanuele Panizzi"
+      minLength: 3
+      maxLength: 16
     User:
       type: object
       properties:
@@ -435,10 +504,13 @@ components:
       description: URL to a photo resource.
       type: string
       example: "/user/profile-photo/123"
+      minLength: 1
     Reaction:
       description: Emoji used in a reaction.
       type: string
       example: "👍"
+      minLength: 1
+      maxLength: 1
     Message:
       title: Message
       description: Represents a single message in a conversation.
@@ -461,11 +533,14 @@ components:
           type: string
           nullable: true
           example: "Nice pasta bro 🍝"
+          minLength: 1
+          maxLength: 2000
         photo:
           description: URL to a photo message resource.
           type: string
           nullable: true
           example: "/messages/photo/54321"
+          minLength: 1
         replyTo:
           description: ID of the message being replied to.
           type: integer
@@ -479,6 +554,7 @@ components:
           description: Name of the user who sent the message.
           type: string
           example: "Emanuele Panizzi"
+          minLength: 1
         reactions:
           type: array
           items:
@@ -499,12 +575,14 @@ components:
           description: The name of the other person or the group.
           type: string
           example: "Mario Rossi"
+          minLength: 1
         photo:
           $ref: "#/components/schemas/PhotoUrl"
         snippet:
           description: A preview of the latest message.
           type: string
           example: "Nice pasta bro"
+          minLength: 1
         lastMessageAt:
           description: Timestamp of the latest message.
           type: string
@@ -549,3 +627,9 @@ components:
       description: The unique identifier for a user.
       schema:
         $ref: "#/components/schemas/Id"
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
