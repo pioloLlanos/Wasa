@@ -25,13 +25,19 @@ type Conversation struct {
 	Members         []User   `json:"members"`
 }
 
+// Message rappresenta un messaggio inviato in una conversazione.
 type Message struct {
-	ID             uint64 `json:"id"`
-	SenderID       uint64 `json:"sender_id"`
-	Content        string `json:"content"`
-	Timestamp      string `json:"timestamp"`
-	ConversationID uint64 `json:"conversation_id"`
+    ID             uint64    `json:"id"`
+    ConversationID uint64    `json:"conversationId"`
+    SenderID       uint64    `json:"senderId"`
+    Content        string    `json:"content"`
+    Timestamp      string    `json:"timestamp"`
+    
+    ReplyToID      uint64    `json:"replyToId,omitempty"` 
+    
+    IsPhoto        bool      `json:"isPhoto"`           
 }
+
 
 // --- 2. STRUTTURA DI IMPLEMENTAZIONE ---
 
