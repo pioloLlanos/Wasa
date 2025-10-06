@@ -56,6 +56,11 @@ type AppDatabase interface {
     SearchUsers(query string) ([]User, error)
     CheckUserExists(id uint64) error
 
+
+
+    AddReaction(msgID uint64, userID uint64, reaction string) error
+    RemoveReaction(msgID uint64, userID uint64) error
+
     // Metodi di conversazione/gruppo
     GetConversations(userID uint64) ([]Conversation, error)
     

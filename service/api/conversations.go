@@ -13,6 +13,11 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+type conversationDetails struct {
+    Conversation database.Conversation `json:"conversation"`
+    Messages     []database.Message  `json:"messages"`
+}
+
 // Modelli per Request e Response
 type createConversationRequest struct {
 	TargetUserID uint64 `json:"target_user_id"`
@@ -109,8 +114,13 @@ func (rt *_router) getConversation(w http.ResponseWriter, r *http.Request, ps ht
 		return
 	}
 
-    // 3. Successo
-	rt.writeJSON(w, http.StatusOK, conversationDetails)
+    response := conversationDetails{
+		Conversation: conversation, 
+		Messages: messages,
+	}
+
+	// Al posto di "conversationDetails" usa la variabile 'response' (riga 113)
+	rt.writeJSON(w, http.StatusOK, response) 
 }
 
 
@@ -210,5 +220,5 @@ func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, ps httpro
 	}
 
 	// 7. Successo
-	rt.writeJSON(w, http.StatusOK, messageIDResponse{MessageID: msgID})
+	rt.writeJSON(w, http.StatusCreated, messageIDResponse{MessageID: msgID}) 
 }
