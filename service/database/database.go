@@ -3,8 +3,6 @@ package database
 import (
     "database/sql"
     "errors"
-    "fmt"
-    "strings"
 )
 // Dichiarazione degli errori custom (Devono essere definiti in un file del pacchetto database)
 var AppErrorConversationNotFound = errors.New("conversazione non trovata")
