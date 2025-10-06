@@ -1,5 +1,85 @@
 package database
 
+import (
+    "database/sql"
+    // Altri import come errors, fmt, strings, ecc.
+)
+
+// 1. Strutture dei Modelli (D.T.O.) - Richieste da conversation.go
+type User struct {
+    ID       uint64 `json:"id"`
+    Name     string `json:"name"`
+    PhotoURL string `json:"photo_url"`
+}
+
+type Conversation struct {
+    ID              uint64   `json:"id"`
+    Name            string   `json:"name,omitempty"`
+    IsGroup         bool     `json:"is_group"`
+    LastMessageID   uint64   `json:"last_message_id,omitempty"`
+    PhotoURL        string   `json:"photo_url,omitempty"`
+    Members         []User   `json:"members"`
+}
+
+type Message struct {
+    ID              uint64    `json:"id"`
+    SenderID        uint64    `json:"sender_id"`
+    Content         string    `json:"content"`
+    Timestamp       string    `json:"timestamp"` 
+    ConversationID  uint64    `json:"conversation_id"`
+}
+
+
+// 2. Struttura di Implementazione del Database - Richiesta da tutti i metodi
+type appdbimpl struct {
+    c *sql.DB 
+}
+
+
+// 3. Funzione Costruttore (New) - Richiesta da main.go
+func New(db *sql.DB) (AppDatabase, error) {
+    if db == nil {
+        return nil, errors.New("database is required")
+    }
+    
+    // In un progetto reale, qui andrebbe la logica per migrare lo schema del DB
+    
+    return &appdbimpl{
+        c: db,
+    }, nil
+}
+
+// 4. Interfaccia Pubblica (AppDatabase) - Richiesta da api.go e main.go
+// Devi includere qui TUTTE le firme dei metodi implementati in database.go, conversation.go, message.go, user.go, ecc.
+type AppDatabase interface {
+    CreateUser(name string) (uint64, error)
+    GetUserByName(name string) (uint64, error)
+    SetUserName(id uint64, name string) error
+    SetUserPhotoURL(id uint64, url string) error
+    SearchUsers(query string) ([]User, error)
+    CheckUserExists(id uint64) error // Richiesto in api-context-wrapper.go
+    
+    // Metodi di conversazione/gruppo
+    GetConversations(userID uint64) ([]Conversation, error)
+    CreateGroup(adminID uint64, name string, initialMembers []uint64) (uint64, error)
+    SetConversationName(convID uint64, adminID uint64, newName string) error
+    SetConversationPhotoURL(convID uint64, adminID uint64, url string) error
+    AddMemberToConversation(convID uint64, adminID uint64, targetUserID uint64) error
+    RemoveMemberFromConversation(convID uint64, removerID uint64, targetUserID uint64) error
+
+    // Metodi per i messaggi
+    CreateMessage(convID uint64, senderID uint64, content string) (uint64, error)
+    DeleteMessage(msgID uint64, userID uint64) error
+    ForwardMessage(msgID uint64, senderID uint64, targetConvID uint64) (uint64, error)
+    
+    // Health Check
+    Ping() error // Richiesto in liveness.go
+}
+
+// Implementazione di Ping() - Richiesto in liveness.go
+func (db *appdbimpl) Ping() error {
+    return db.c.Ping()
+}
 
 // checkAdminStatus è una funzione di utilità per verificare se un utente è admin di una conversazione.
 func (db *appdbimpl) checkAdminStatus(convID uint64, userID uint64) error {
