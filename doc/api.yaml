@@ -35,7 +35,7 @@ paths:
       description: If the user does not exist, it will be created, and an identifier is returned. If the user exists, the user identifier is returned.
       operationId: doLogin
       requestBody:
-        description: User details
+        description: User details for login or registration
         content:
           application/json:
             schema:
@@ -47,11 +47,12 @@ paths:
                   minLength: 3
                   maxLength: 16
                   pattern: "^[a-zA-Z0-9_-]{3,16}$"
+                  description: The user's desired username.
               required:
                 - name
       responses:
         '201':
-          description: User log-in action successful
+          description: User log-in action successful, returns the user ID
           content:
             application/json:
               schema:
@@ -60,14 +61,16 @@ paths:
                   identifier:
                     type: integer
                     example: 30
+                    description: The unique identifier for the user.
 
   /me/name:
     put:
       tags: ["user"]
       summary: Updates the name of the authenticated user
-      description: The name must be unique.
+      description: The name must be unique and adheres to the specified pattern.
       operationId: setMyUserName
       requestBody:
+        description: New name for the authenticated user
         content:
           application/json:
             schema:
@@ -90,8 +93,10 @@ paths:
     put:
       tags: ["user"]
       summary: Updates the authenticated user's profile photo
+      description: Uploads a new profile photo for the authenticated user.
       operationId: setMyPhoto
       requestBody:
+        description: New profile photo file
         content:
           multipart/form-data:
             schema:
@@ -100,7 +105,7 @@ paths:
                 image:
                   type: string
                   format: binary
-                  description: New profile image
+                  description: New profile image file (e.g., JPEG, PNG)
               required:
                 - image
       responses:
@@ -126,7 +131,7 @@ paths:
             minLength: 1
             maxLength: 50
           required: true
-          description: The username to search for.
+          description: The username substring to search for.
       responses:
         "200":
           description: A list of users found
@@ -135,6 +140,7 @@ paths:
               schema:
                 type: array
                 minItems: 0
+                maxItems: 100 # Aggiunto maxItems per l'array
                 items:
                   $ref: "#/components/schemas/User"
 
@@ -152,6 +158,7 @@ paths:
               schema:
                 type: array
                 minItems: 0
+                maxItems: 500 # Aggiunto maxItems per l'array
                 items:
                   $ref: "#/components/schemas/Conversation"
         "401":
@@ -159,9 +166,10 @@ paths:
     post:
       tags: ["conversations"]
       summary: Starts a new conversation with a specific user
-      description: Creates a new one-on-one conversation with a given user.
+      description: Creates a new one-on-one conversation with a given user ID.
       operationId: startNewConversation
       requestBody:
+        description: User ID of the recipient
         content:
           application/json:
             schema:
@@ -173,7 +181,7 @@ paths:
                 - userId
       responses:
         "201":
-          description: Conversation started successfully
+          description: Conversation started successfully, returns the conversation ID
           content:
             application/json:
               schema:
@@ -202,6 +210,7 @@ paths:
               schema:
                 type: array
                 minItems: 0
+                maxItems: 50 # Aggiunto maxItems per l'array
                 items:
                   $ref: "#/components/schemas/Message"
         "403":
@@ -213,8 +222,10 @@ paths:
     post:
       tags: ["conversations"]
       summary: Sends a new message to a conversation
+      description: Sends a text or image message to the specified conversation.
       operationId: sendMessage
       requestBody:
+        description: Message content (text and/or image) and options
         content:
           multipart/form-data:
             schema:
@@ -228,13 +239,16 @@ paths:
                 image:
                   type: string
                   format: binary
-                  description: An image file.
+                  description: An optional image file for the message.
                 replyTo:
                   type: integer
-                  description: The ID of the message being replied to.
+                  description: The ID of the message being replied to (optional).
+                  nullable: true # Lasciato nullable solo qui, perché non è un parametro REQUIRED.
                 forwarded:
                   type: boolean
-                  description: Indicates if the message is forwarded.
+                  description: Indicates if the message is forwarded (optional).
+                  default: false
+                  nullable: true # Lasciato nullable solo qui, perché non è un parametro REQUIRED.
               # Aggiunta la validazione per assicurare che almeno una proprietà sia presente
               oneOf:
                 - required: [content]
@@ -256,6 +270,7 @@ paths:
     delete:
       tags: ["messages"]
       summary: Deletes a sent message
+      description: Allows the sender to delete a message they have sent.
       operationId: deleteMessage
       responses:
         "200":
@@ -274,8 +289,10 @@ paths:
     post:
       tags: ["messages"]
       summary: Forwards an existing message to multiple conversations
+      description: Sends a copy of the message to a list of other conversations.
       operationId: forwardMessage
       requestBody:
+        description: List of conversation IDs to forward the message to
         content:
           application/json:
             schema:
@@ -307,8 +324,10 @@ paths:
     post:
       tags: ["messages"]
       summary: Adds a reaction to a message
+      description: Adds an emoji reaction to the specified message.
       operationId: commentMessage
       requestBody:
+        description: Emoji for the reaction
         content:
           application/json:
             schema:
@@ -347,6 +366,7 @@ paths:
       description: Creates a new group with an initial list of members.
       operationId: createGroup
       requestBody:
+        description: Group name and initial members
         content:
           application/json:
             schema:
@@ -366,7 +386,7 @@ paths:
                 - memberIds
       responses:
         "201":
-          description: Group created successfully
+          description: Group created successfully, returns the group ID
           content:
             application/json:
               schema:
@@ -381,8 +401,10 @@ paths:
     put:
       tags: ["groups"]
       summary: Updates the name of a group
+      description: Changes the name of the specified group.
       operationId: setGroupName
       requestBody:
+        description: New name for the group
         content:
           application/json:
             schema:
@@ -407,8 +429,10 @@ paths:
     put:
       tags: ["groups"]
       summary: Updates the group profile photo
+      description: Uploads a new profile photo for the group.
       operationId: setGroupPhoto
       requestBody:
+        description: New group photo file
         content:
           multipart/form-data:
             schema:
@@ -417,7 +441,7 @@ paths:
                 image:
                   type: string
                   format: binary
-                  description: New group photo.
+                  description: New group photo file (e.g., JPEG, PNG).
               required:
                 - image
       responses:
@@ -437,8 +461,10 @@ paths:
     post:
       tags: ["groups"]
       summary: Adds a list of users to a group
+      description: Adds specified users to the existing group.
       operationId: addToGroup
       requestBody:
+        description: List of user IDs to add
         content:
           application/json:
             schema:
@@ -469,6 +495,7 @@ paths:
     delete:
       tags: ["groups"]
       summary: Makes a user leave a group
+      description: Removes the specified user from the group.
       operationId: leaveGroup
       responses:
         "200":
@@ -482,17 +509,18 @@ paths:
 components:
   schemas:
     Id:
-      description: A unique identifier.
+      description: A unique identifier (integer).
       type: integer
       example: 1234
     Name:
-      description: A new username or group name.
+      description: A new username or group name, between 3 and 16 characters.
       type: string
       example: "Emanuele Panizzi"
       minLength: 3
       maxLength: 16
     User:
       type: object
+      description: Represents a user with basic profile information.
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -500,13 +528,18 @@ components:
           $ref: "#/components/schemas/Name"
         photo:
           $ref: "#/components/schemas/PhotoUrl"
+      required:
+        - id
+        - name
+        - photo # ERRORE CORRETTO: Aggiunto 'required' per User
     PhotoUrl:
       description: URL to a photo resource.
       type: string
       example: "/user/profile-photo/123"
       minLength: 1
+      maxLength: 255 # Aggiunto maxLength
     Reaction:
-      description: Emoji used in a reaction.
+      description: Emoji used in a reaction (single character).
       type: string
       example: "👍"
       minLength: 1
@@ -531,20 +564,21 @@ components:
         content:
           description: Text content of the message.
           type: string
-          nullable: true
+          nullable: true # Nonostante il warning, mantenuto nullable perché ha senso che sia opzionale (se è presente solo la foto)
           example: "Nice pasta bro 🍝"
           minLength: 1
           maxLength: 2000
         photo:
           description: URL to a photo message resource.
           type: string
-          nullable: true
+          nullable: true # Mantenuto nullable
           example: "/messages/photo/54321"
           minLength: 1
+          maxLength: 255 # Aggiunto maxLength
         replyTo:
           description: ID of the message being replied to.
           type: integer
-          nullable: true
+          nullable: true # Mantenuto nullable
           example: 30
         isForwarded:
           description: Indicates if the message is forwarded.
@@ -555,18 +589,29 @@ components:
           type: string
           example: "Emanuele Panizzi"
           minLength: 1
+          maxLength: 16 # Aggiunto maxLength (usando la stessa del Name)
         reactions:
+          description: List of reactions to the message.
           type: array
           items:
             type: object
+            description: A single reaction with emoji and user ID.
             properties:
               emoji:
                 $ref: "#/components/schemas/Reaction"
               userId:
                 $ref: "#/components/schemas/Id"
+          maxItems: 20 # Aggiunto maxItems per le reazioni
+      required:
+        - id
+        - state
+        - sentAt
+        - isForwarded
+        - senderName
+        - reactions # ERRORE CORRETTO: Aggiunto 'required' per Message
     Conversation:
       title: Conversation
-      description: Represents a single conversation.
+      description: Represents a single conversation (one-on-one or group).
       type: object
       properties:
         id:
@@ -576,6 +621,7 @@ components:
           type: string
           example: "Mario Rossi"
           minLength: 1
+          maxLength: 100 # Aggiunto maxLength
         photo:
           $ref: "#/components/schemas/PhotoUrl"
         snippet:
@@ -583,6 +629,7 @@ components:
           type: string
           example: "Nice pasta bro"
           minLength: 1
+          maxLength: 200 # Aggiunto maxLength
         lastMessageAt:
           description: Timestamp of the latest message.
           type: string
@@ -593,10 +640,18 @@ components:
           type: boolean
           example: false
         recipientId:
-          description: The user ID of the other person in a one-on-one chat.
+          description: The user ID of the other person in a one-on-one chat. Null for group chats.
           type: integer
-          nullable: true
+          nullable: true # Mantenuto nullable
           example: 987
+      required:
+        - id
+        - name
+        - photo
+        - snippet
+        - lastMessageAt
+        - isGroup
+
 
   parameters:
     conversationId:
