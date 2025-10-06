@@ -58,23 +58,14 @@ type AppDatabase interface {
 	CreateUser(name string) (uint64, error)
 	GetUserByName(name string) (uint64, error)
 	CheckUserExists(id uint64) error
-
-	// 👈 CORREZIONE CRITICA: SetMyUserName era mancante
-	SetMyUserName(id uint64, name string) error 
-
+	SetMyUserName(id uint64, name string) error
 	SetUserPhotoURL(id uint64, url string) error
 	SearchUsers(query string) ([]User, error)
-	// SetUserName(id uint64, name string) error // Rimossa la firma duplicata/errata
 
 	// 2. CONVERSAZIONI
 	GetConversations(userID uint64) ([]Conversation, error)
-
-	// 👈 AGGIUNTO: Per startNewConversation
 	CreateOrGetPrivateConversation(user1ID, user2ID uint64) (uint64, error)
-	// 👈 AGGIUNTO: Per getConversation
 	GetConversationAndMessages(convID, userID uint64) (Conversation, []Message, error)
-
-	// Metodi di gruppo
 	CreateGroup(adminID uint64, name string, initialMembers []uint64) (uint64, error)
 	SetConversationName(convID uint64, adminID uint64, newName string) error
 	SetConversationPhotoURL(convID uint64, adminID uint64, url string) error
@@ -82,16 +73,15 @@ type AppDatabase interface {
 	RemoveMemberFromConversation(convID uint64, removerID uint64, targetUserID uint64) error
 
 	// 3. MESSAGGI
-	// 👈 CORREZIONE FIRMA: Aggiunto replyToID e isForwarded, come usato in conversations.go
+	// Firma completa
 	CreateMessage(convID uint64, senderID uint64, content string, replyToID uint64, isForwarded bool) (uint64, error)
-	// 👈 AGGIUNTO & CORRETTO FIRMA: Per invio messaggi con foto (con tutti gli argomenti)
-	CreateMessageWithPhoto(convID uint64, senderID uint64, url string, replyToID uint64, isForwarded bool) (uint64, error)
+	// 👈 FIRMA COMPLETA: Corrisponde a quella che vuole l'API layer
+	CreateMessageWithPhoto(convID uint64, senderID uint64, url string, replyToID uint64, isForwarded bool) (uint64, error) 
 
 	DeleteMessage(msgID uint64, userID uint64) error
 	ForwardMessage(msgID uint64, senderID uint64, targetConvID uint64) (uint64, error)
 
 	// 4. REAZIONI
-	// 👈 AGGIUNTO: Per completare messages.go
 	AddReaction(msgID uint64, userID uint64, reaction string) error
 	RemoveReaction(msgID uint64, userID uint64) error
 }

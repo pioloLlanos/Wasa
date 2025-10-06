@@ -7,7 +7,6 @@ import (
     "strings" 
 )
 
-var AppErrorNomeGiaInUso = errors.New("nome utente già in uso")
 
 // CreateUser crea un nuovo utente.
 func (db *appdbimpl) CreateUser(name string) (uint64, error) {
