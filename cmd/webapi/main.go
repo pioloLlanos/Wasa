@@ -28,11 +28,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api"
-	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/database"
-	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/globaltime"
+	
+
+    "github.com/pioloLlanos/Wasa/service/api"
+    "github.com/pioloLlanos/Wasa/service/database"
+    "github.com/pioloLlanos/Wasa/service/globaltime"
+
 	"github.com/ardanlabs/conf"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"

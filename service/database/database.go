@@ -1,3 +1,6 @@
+package database
+
+
 // checkAdminStatus è una funzione di utilità per verificare se un utente è admin di una conversazione.
 func (db *appdbimpl) checkAdminStatus(convID uint64, userID uint64) error {
 	var isAdmin int

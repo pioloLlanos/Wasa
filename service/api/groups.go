@@ -9,7 +9,8 @@ import (
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
-	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api/reqcontext"
+
+	"github.com/pioloLlanos/Wasa/service/api/reqcontext"
 )
 
 // Definizione delle strutture per i body delle richieste (Aggiornate secondo OpenAPI)
