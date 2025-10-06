@@ -1,17 +1,18 @@
 package api
 
 import (
-	"github.com/pioloLlanos/Wasa/service/database"
+	"net/http"
+	"strconv"
+	"strings"
+
 	"github.com/gofrs/uuid"
 	"github.com/julienschmidt/httprouter"
 	"github.com/sirupsen/logrus"
-	"net/http"
-	"strconv" // 👈 AGGIUNTO
-	"strings" // 👈 AGGIUNTO
+
+	// 👈 CORREZIONE: Aggiunto l'underscore per risolvere l'errore "imported and not used"
+	_ "github.com/pioloLlanos/Wasa/service/database"
 	"github.com/pioloLlanos/Wasa/service/api/reqcontext" 
 )
-
-// httpRouterHandler e _router rimangono invariati...
 
 // httpRouterHandler è la firma per le funzioni che accettano un reqcontext.RequestContext in aggiunta a quelli
 // richiesti dal pacchetto httprouter.
@@ -40,9 +41,9 @@ func (rt *_router) wrap(fn httpRouterHandler) func(http.ResponseWriter, *http.Re
 		// ----------------------------------------------------
 		// LOGICA DI AUTENTICAZIONE
 		// ----------------------------------------------------
-		
+
 		authHeader := r.Header.Get("Authorization")
-		
+
 		// 1. Check header
 		if !strings.HasPrefix(authHeader, "Bearer ") {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -51,7 +52,7 @@ func (rt *_router) wrap(fn httpRouterHandler) func(http.ResponseWriter, *http.Re
 
 		// 2. Extract token
 		tokenString := authHeader[len("Bearer "):]
-		
+
 		// 3. Convert ID
 		userID, err := strconv.ParseUint(tokenString, 10, 64)
 		if err != nil {
@@ -64,10 +65,10 @@ func (rt *_router) wrap(fn httpRouterHandler) func(http.ResponseWriter, *http.Re
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		
+
 		// 5. Inject ID into context
 		ctx.UserID = userID // 👈 Necessita del campo UserID in reqcontext.RequestContext
-		
+
 		// ----------------------------------------------------
 
 		// Call the next handler in chain

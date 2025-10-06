@@ -61,6 +61,8 @@ type AppDatabase interface {
     AddReaction(msgID uint64, userID uint64, reaction string) error
     RemoveReaction(msgID uint64, userID uint64) error
 
+    SetMyUserName(id uint64, name string) error
+
     // Metodi di conversazione/gruppo
     GetConversations(userID uint64) ([]Conversation, error)
     

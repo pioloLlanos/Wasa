@@ -1,11 +1,9 @@
 package api
 
 import (
-	"database/sql" // 👈 AGGIUNTO: Necessario per sql.ErrNoRows in setMyPhoto
-	"encoding/json"
+	"database/sql" // Necessario per sql.ErrNoRows in setMyPhoto
 	"errors"
 	"net/http"
-	"strconv"
 
 	// Percorsi corretti
 	"github.com/julienschmidt/httprouter"
@@ -15,7 +13,7 @@ import (
 
 // setUserNameRequest è la struttura per deserializzare il body della richiesta PUT /me/name
 type setUserNameRequest struct {
-	NewName string `json:"name"`
+	NewName string `json:"name"` // Il campo corretto da OpenAPI (assumo)
 }
 
 // setMyUserName implementa l'handler PUT /me/name per aggiornare il nome utente
@@ -38,14 +36,12 @@ func (rt *_router) setMyUserName(w http.ResponseWriter, r *http.Request, ps http
 
 	// 3. Logica di business: Aggiorna il nome nel database
 	if err := rt.db.SetMyUserName(userID, req.NewName); err != nil {
-		// ⚠️ CORREZIONE: Usa la costante d'errore del DB definita in user.go del database
-		if errors.Is(err, database.AppErrorNomeGiaInUso) { 
+		if errors.Is(err, database.AppErrorNomeGiaInUso) {
 			rt.writeJSON(w, http.StatusConflict, map[string]string{"error": "Nome utente già in uso"})
 			return
 		}
-		// Per l'utente non trovato, si usa la logica standard (sql.ErrNoRows se l'utente è cancellato, ma improbabile qui)
 		if errors.Is(err, sql.ErrNoRows) {
-			rt.writeJSON(w, http.StatusNotFound, nil) // Non dovrebbe accadere se l'autenticazione funziona
+			rt.writeJSON(w, http.StatusNotFound, nil)
 			return
 		}
 		ctx.Logger.WithError(err).Error("Database error during SetMyUserName")
@@ -81,8 +77,7 @@ func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, ps httprou
 	defer file.Close()
 
 	// 3. Logica di upload e aggiornamento URL
-	// ⚠️ CORREZIONE: rt.simulateFileUpload richiede 3 argomenti: (convID, userID, filename). 
-	// Usiamo 0 o un placeholder per convID, dato che è una foto utente.
+	// CORREZIONE: rt.simulateFileUpload richiede 3 argomenti: (convID, userID, filename).
 	photoURL, err := rt.simulateFileUpload(0, userID, fileHeader.Filename)
 	if err != nil {
 		ctx.Logger.WithError(err).Error("Error saving file")
@@ -126,8 +121,5 @@ func (rt *_router) searchUsers(w http.ResponseWriter, r *http.Request, ps httpro
 	}
 
 	// 3. Successo: 200 OK con la lista di utenti
-	// Se non trova utenti, users sarà un array vuoto [], che è accettabile.
 	rt.writeJSON(w, http.StatusOK, users)
 }
-
-// searchUsers è stato completato e corretto!
