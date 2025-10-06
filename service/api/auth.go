@@ -25,7 +25,7 @@ func (rt *_router) doLogin(w http.ResponseWriter, r *http.Request, ps httprouter
 	var req loginRequest
 	
 	// 1. Decodifica la richiesta JSON
-	if err := rt.decodeJSON(r, &req); err != nil {
+	if err := rt.decodeJSON(w, r, &req); err != nil {
 		rt.writeJSON(w, http.StatusBadRequest, nil)
 		return
 	}

@@ -1,11 +1,15 @@
 package database
 
 import (
-	"database/sql"
-	"errors" // Necessario per errors.New in New()
-	// Non c'è bisogno di fmt o strings in questo file pulito, dato che i metodi che li usavano sono in conversation.go
+    "database/sql"
+    "errors"
+    "fmt"
+    "strings"
 )
-
+// Dichiarazione degli errori custom (Devono essere definiti in un file del pacchetto database)
+var AppErrorConversationNotFound = errors.New("conversazione non trovata")
+var AppErrorUserNotMember = errors.New("l'utente non è membro della conversazione")
+var AppErrorReplyToNotFound = errors.New("il messaggio di risposta (replyTo) non è stato trovato")
 // --- 1. STRUTTURE DEI MODELLI (DTO) ---
 
 type User struct {
@@ -38,35 +42,43 @@ type appdbimpl struct {
 	c *sql.DB
 }
 
-// --- 3. INTERFACCIA PUBBLICA ---
 
-// AppDatabase è l'interfaccia pubblica esposta dal livello database.
 type AppDatabase interface {
-	// Metodi Utente
-	CreateUser(name string) (uint64, error)
-	GetUserByName(name string) (uint64, error)
-	SetUserName(id uint64, name string) error
-	SetUserPhotoURL(id uint64, url string) error
-	SearchUsers(query string) ([]User, error)
-	CheckUserExists(id uint64) error // Assumendo che questo esista in user.go
+    // ... Metodi Utente e Gruppo (Lascia i tuoi esistenti)
+    CreateUser(name string) (uint64, error)
+    GetUserByName(name string) (uint64, error)
+    SetUserName(id uint64, name string) error
+    SetUserPhotoURL(id uint64, url string) error
+    SearchUsers(query string) ([]User, error)
+    CheckUserExists(id uint64) error
 
-	// Metodi di conversazione/gruppo
-	GetConversations(userID uint64) ([]Conversation, error)
-	CreateGroup(adminID uint64, name string, initialMembers []uint64) (uint64, error)
-	SetConversationName(convID uint64, adminID uint64, newName string) error
-	SetConversationPhotoURL(convID uint64, adminID uint64, url string) error
-	AddMemberToConversation(convID uint64, adminID uint64, targetUserID uint64) error
-	RemoveMemberFromConversation(convID uint64, removerID uint64, targetUserID uint64) error
+    // Metodi di conversazione/gruppo
+    GetConversations(userID uint64) ([]Conversation, error)
+    
+    // 👈 MANCANTE 1: Per startNewConversation
+    CreateOrGetPrivateConversation(user1ID, user2ID uint64) (uint64, error)
+    // 👈 MANCANTE 2: Per getConversation
+    GetConversationAndMessages(convID, userID uint64) (Conversation, []Message, error)
 
-	// Metodi per i messaggi
-	CreateMessage(convID uint64, senderID uint64, content string) (uint64, error)
-	DeleteMessage(msgID uint64, userID uint64) error
-	ForwardMessage(msgID uint64, senderID uint64, targetConvID uint64) (uint64, error)
+    CreateGroup(adminID uint64, name string, initialMembers []uint64) (uint64, error)
+    SetConversationName(convID uint64, adminID uint64, newName string) error
+    SetConversationPhotoURL(convID uint64, adminID uint64, url string) error
+    AddMemberToConversation(convID uint64, adminID uint64, targetUserID uint64) error
+    RemoveMemberFromConversation(convID uint64, removerID uint64, targetUserID uint64) error
 
-	// Health Check
-	Ping() error
+    // Metodi per i messaggi
+    // 👈 AGGIORNATO: Correzione del numero di argomenti (5 invece di 3)
+    CreateMessage(convID uint64, senderID uint64, content string, replyToID uint64, isPhoto bool) (uint64, error)
+    // 👈 MANCANTE 3: Per invio messaggi con foto
+    CreateMessageWithPhoto(convID uint64, senderID uint64, url string) (uint64, error)
+    
+    DeleteMessage(msgID uint64, userID uint64) error
+    ForwardMessage(msgID uint64, senderID uint64, targetConvID uint64) (uint64, error)
+    // ... altri metodi (AddReaction, RemoveReaction, ecc.)
+    
+    // Health Check
+    Ping() error
 }
-
 // --- 4. FUNZIONE COSTRUTTORE E METODI BASE ---
 
 // New restituisce una nuova istanza di AppDatabase.

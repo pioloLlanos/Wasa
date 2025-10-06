@@ -300,3 +300,25 @@ func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, ps httprou
 
 	w.WriteHeader(http.StatusOK) // 200 OK (OpenAPI dice 200)
 }
+
+
+
+// getGroupDetails implementa l'handler GET /groups/:groupId.
+// Nota: I dettagli del gruppo sono spesso ottenuti tramite l'handler getConversation,
+// ma qui forniamo un'implementazione separata per compilare.
+func (rt *_router) getGroupDetails(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
+	// Questo endpoint reindirizzerà probabilmente a getConversation se la logica è condivisa.
+	// Per ora, implementazione base:
+
+	convIDStr := ps.ByName("groupId")
+	convID, err := strconv.ParseUint(convIDStr, 10, 64)
+	if err != nil {
+		rt.writeJSON(w, http.StatusBadRequest, nil)
+		return
+	}
+
+	// ⚠️ Implementazione base che presuppone che tu voglia semplicemente reindirizzare
+	// o usare una logica simile a getConversation (che è un handler separato).
+	// Per compilare, mettiamo un placeholder:
+	rt.writeJSON(w, http.StatusNotImplemented, nil)
+}
