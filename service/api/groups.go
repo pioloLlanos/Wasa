@@ -1,17 +1,16 @@
 package api
 
 import (
-    "database/sql"
-    "errors"
-    "fmt"
-    "net/http"
-    "strconv"
-    "strings"
+	"database/sql"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
 
-    "github.com/julienschmidt/httprouter"
-    "github.com/pioloLlanos/Wasa/service/api/reqcontext"
-    // 👈 NUOVO: Import del pacchetto database
-    "github.com/pioloLlanos/Wasa/service/database" 
+	"github.com/julienschmidt/httprouter"
+	"github.com/pioloLlanos/Wasa/service/api/reqcontext"
+	"github.com/pioloLlanos/Wasa/service/database"
 )
 
 // Definizione delle strutture per i body delle richieste (Aggiornate secondo OpenAPI)
@@ -114,12 +113,12 @@ func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, ps httpr
 	// Chiama la logica del DB (che verifica anche i permessi di amministrazione)
 	err = rt.db.SetConversationName(convID, adminID, req.NewName)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) || strings.Contains(err.Error(), "l'utente non è membro") {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, database.AppErrorConversationNotFound) {
 			rt.writeJSON(w, http.StatusNotFound, nil)
 			return
 		}
-		if strings.Contains(err.Error(), "non è amministratore") {
-			rt.writeJSON(w, http.StatusForbidden, nil)
+		if errors.Is(err, database.AppErrorUserNotMember) {
+			rt.writeJSON(w, http.StatusForbidden, map[string]string{"error": "You are not an administrator of this group."})
 			return
 		}
 		ctx.Logger.WithError(err).Error("Database error during SetConversationName")
@@ -129,6 +128,7 @@ func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, ps httpr
 
 	w.WriteHeader(http.StatusNoContent) // 204 No Content per successo senza body
 }
+
 // setGroupPhoto implementa l'handler PUT /groups/:groupId/photo
 func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
 	userID := ctx.UserID
@@ -140,7 +140,7 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps http
 		rt.writeJSON(w, http.StatusBadRequest, nil)
 		return
 	}
-	
+
 	// 2. Parsa il Form Multipart (limite a 5MB per la foto)
 	err = r.ParseMultipartForm(5 << 20) // 5MB limit
 	if err != nil {
@@ -162,35 +162,30 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps http
 	}
 	defer file.Close()
 
-	// 4. Verifica che l'utente sia membro (o admin, se richiesto dal progetto)
-	// Supponiamo che solo i membri possano modificare la foto, ma il DB deve impedire la modifica se non si è admin.
-	// La funzione CheckUserMemberStatus deve essere implementata nel DB layer.
-	// Per ora, assumiamo che SetGroupPhotoURL si occupi di verificare i permessi.
-
-	// 5. Logica di upload
-	photoURL, err := rt.simulateFileUpload(convID, userID, fileHeader.Filename)  
+	// 4. Logica di upload
+	photoURL, err := rt.simulateFileUpload(convID, userID, fileHeader.Filename)
 	if err != nil {
 		ctx.Logger.WithError(err).Error("Error saving file")
 		rt.writeJSON(w, http.StatusInternalServerError, nil)
 		return
 	}
 
-	// 6. Aggiorna l'URL della foto del gruppo nel database
+	// 5. Aggiorna l'URL della foto del gruppo nel database
 	if err := rt.db.SetConversationPhotoURL(convID, userID, photoURL); err != nil {
-    	if errors.Is(err, database.AppErrorUserNotMember) { // Ora 'database' è definito
-        	rt.writeJSON(w, http.StatusForbidden, nil) // 403 Forbidden
-        	return
-    	}
-    	if errors.Is(err, database.AppErrorConversationNotFound) { // Ora 'database' è definito
-        	rt.writeJSON(w, http.StatusNotFound, nil) // 404 Not Found
-        	return
-    	}
-    	ctx.Logger.WithError(err).Error("Database error during SetGroupPhotoURL")
-    	rt.writeJSON(w, http.StatusInternalServerError, nil)
-    	return
+		if errors.Is(err, database.AppErrorUserNotMember) {
+			rt.writeJSON(w, http.StatusForbidden, nil) // 403 Forbidden (Non membro o non admin)
+			return
+		}
+		if errors.Is(err, database.AppErrorConversationNotFound) {
+			rt.writeJSON(w, http.StatusNotFound, nil) // 404 Not Found
+			return
+		}
+		ctx.Logger.WithError(err).Error("Database error during SetGroupPhotoURL")
+		rt.writeJSON(w, http.StatusInternalServerError, nil)
+		return
 	}
 
-	// 7. Successo: 200 OK
+	// 6. Successo: 200 OK
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -216,13 +211,8 @@ func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, ps httprou
 		return
 	}
 
-	// Aggiungi tutti i membri uno per uno (La logica del DB gestisce l'unicità e l'admin status)
-	// Visto che lo schema OpenAPI parla di una lista, iteriamo e gestiamo gli errori.
-	// Per semplicità, consideriamo un successo se almeno un utente viene aggiunto.
-	
-	// Nota: Un'implementazione più robusta userebbe una transazione per aggiungere tutti i membri o nessuno.
-	// Qui usiamo l'approccio iterativo semplice.
-	
+	// Nota: Un'implementazione più robusta dovrebbe usare una transazione. Qui iteriamo.
+
 	var successfulAdds int
 	var firstError error
 
@@ -230,17 +220,15 @@ func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, ps httprou
 		if targetUserID == 0 {
 			continue // Salta ID non validi
 		}
-		
+
 		err = rt.db.AddMemberToConversation(convID, adminID, targetUserID)
-		
+
 		if err != nil {
-			if strings.Contains(err.Error(), "non è amministratore") {
-				// Se l'admin fallisce all'inizio, è un errore 403.
+			if errors.Is(err, database.AppErrorUserNotMember) {
+				// L'admin non è autorizzato (non è un admin del gruppo)
 				rt.writeJSON(w, http.StatusForbidden, nil)
 				return
 			}
-			
-			// Se l'errore non è di admin, è legato al target user (es. non esiste, o è già membro)
 			if firstError == nil {
 				firstError = err // Salva il primo errore non di admin
 			}
@@ -255,8 +243,7 @@ func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, ps httprou
 			rt.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to add members. Check if users exist and you are an admin."})
 			return
 		}
-		// Se successfulAdds è 0 ma non ci sono stati errori critici (es. tutti i membri erano già nel gruppo),
-		// l'operazione è tecnicamente un successo (200 OK)
+		// Se 0 aggiunte ma nessun errore, significa che tutti erano già membri.
 	}
 
 	w.WriteHeader(http.StatusOK) // 200 OK
@@ -284,12 +271,12 @@ func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, ps httprou
 	err = rt.db.RemoveMemberFromConversation(convID, removerID, targetUserID)
 
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) || strings.Contains(err.Error(), "non è membro") {
-			rt.writeJSON(w, http.StatusNotFound, nil) // Non era membro / Utente target non trovato
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, database.AppErrorConversationNotFound) {
+			rt.writeJSON(w, http.StatusNotFound, nil) // Conversazione o utente target non trovato
 			return
 		}
-		if strings.Contains(err.Error(), "solo gli amministratori") {
-			rt.writeJSON(w, http.StatusForbidden, nil) // Non admin (nel caso removerID != targetUserID)
+		if errors.Is(err, database.AppErrorUserNotMember) {
+			rt.writeJSON(w, http.StatusForbidden, nil) // Non autorizzato (es. non admin che tenta di rimuovere)
 			return
 		}
 
@@ -298,17 +285,12 @@ func (rt *_router) leaveGroup(w http.ResponseWriter, r *http.Request, ps httprou
 		return
 	}
 
-	w.WriteHeader(http.StatusOK) // 200 OK (OpenAPI dice 200)
+	w.WriteHeader(http.StatusOK) // 200 OK
 }
 
-
-
 // getGroupDetails implementa l'handler GET /groups/:groupId.
-// Nota: I dettagli del gruppo sono spesso ottenuti tramite l'handler getConversation,
-// ma qui forniamo un'implementazione separata per compilare.
 func (rt *_router) getGroupDetails(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
-	// Questo endpoint reindirizzerà probabilmente a getConversation se la logica è condivisa.
-	// Per ora, implementazione base:
+	userID := ctx.UserID
 
 	convIDStr := ps.ByName("groupId")
 	convID, err := strconv.ParseUint(convIDStr, 10, 64)
@@ -317,8 +299,25 @@ func (rt *_router) getGroupDetails(w http.ResponseWriter, r *http.Request, ps ht
 		return
 	}
 
-	// ⚠️ Implementazione base che presuppone che tu voglia semplicemente reindirizzare
-	// o usare una logica simile a getConversation (che è un handler separato).
-	// Per compilare, mettiamo un placeholder:
-	rt.writeJSON(w, http.StatusNotImplemented, nil)
+	// 👈 CORREZIONE: Usiamo convID per chiamare la logica del DB.
+	// Assumiamo che GetConversationAndMessages restituisca anche i membri e i dettagli.
+	group, _, err := rt.db.GetConversationAndMessages(convID, userID)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, database.AppErrorConversationNotFound) {
+			rt.writeJSON(w, http.StatusNotFound, nil)
+			return
+		}
+		if errors.Is(err, database.AppErrorUserNotMember) {
+			rt.writeJSON(w, http.StatusForbidden, nil) // L'utente non è membro del gruppo
+			return
+		}
+
+		ctx.Logger.WithError(err).Error("Database error during GetConversationAndMessages for group details")
+		rt.writeJSON(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	// Restituisce solo i dettagli della conversazione (gruppo), non i messaggi
+	rt.writeJSON(w, http.StatusOK, group)
 }
