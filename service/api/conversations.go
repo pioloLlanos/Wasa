@@ -92,7 +92,7 @@ func (rt *_router) getConversation(w http.ResponseWriter, r *http.Request, ps ht
 	}
     
     // 2. Chiama la logica del DB (Assumiamo che il DB gestisca il controllo di membership)
-	conversationDetails, err := rt.db.GetConversationAndMessages(convID, userID)
+	conversation, messages, err := rt.db.GetConversationAndMessages(convID, userID)
 	
 	if err != nil {
 		if errors.Is(err, database.AppErrorConversationNotFound) {
@@ -183,10 +183,8 @@ func (rt *_router) sendMessage(w http.ResponseWriter, r *http.Request, ps httpro
 		}
 
 		// 5. Creazione del messaggio con foto (Richiede rt.db.CreateMessageWithPhoto nel DB layer)
-		// ASSUMI che tu abbia implementato:
-		// msgID, err = rt.db.CreateMessageWithPhoto(convID, userID, content, photoURL, replyToID, isForwarded) 
-        // Per ora, usa una chiamata generica:
-		msgID, err = rt.db.CreateMessageWithPhoto(convID, userID, content, photoURL, replyToID, isForwarded)
+		msgID, err := rt.db.CreateMessageWithPhoto(convID, userID, photoURL)
+
         
 	} else {
 		// 5. Creazione del messaggio di solo testo

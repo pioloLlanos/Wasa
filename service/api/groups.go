@@ -1,16 +1,17 @@
 package api
 
 import (
-	"database/sql"
-	"errors"
-	"fmt"
-	"net/http"
-	"strconv"
-	"strings"
+    "database/sql"
+    "errors"
+    "fmt"
+    "net/http"
+    "strconv"
+    "strings"
 
-	"github.com/julienschmidt/httprouter"
-
-	"github.com/pioloLlanos/Wasa/service/api/reqcontext"
+    "github.com/julienschmidt/httprouter"
+    "github.com/pioloLlanos/Wasa/service/api/reqcontext"
+    // 👈 NUOVO: Import del pacchetto database
+    "github.com/pioloLlanos/Wasa/service/database" 
 )
 
 // Definizione delle strutture per i body delle richieste (Aggiornate secondo OpenAPI)
@@ -49,7 +50,7 @@ func (rt *_router) createGroup(w http.ResponseWriter, r *http.Request, ps httpro
 	adminID := ctx.UserID // L'ID dell'utente autenticato è l'admin
 
 	var req createGroupRequest
-	if err := rt.decodeJSON(r, &req); err != nil {
+	if err := rt.decodeJSON(w, r, &req); err != nil {
 		rt.writeJSON(w, http.StatusBadRequest, nil)
 		return
 	}
@@ -100,7 +101,7 @@ func (rt *_router) setGroupName(w http.ResponseWriter, r *http.Request, ps httpr
 	}
 
 	var req updateNameRequest
-	if err := rt.decodeJSON(r, &req); err != nil {
+	if err := rt.decodeJSON(w, r, &req); err != nil {
 		rt.writeJSON(w, http.StatusBadRequest, nil)
 		return
 	}
@@ -167,7 +168,7 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps http
 	// Per ora, assumiamo che SetGroupPhotoURL si occupi di verificare i permessi.
 
 	// 5. Logica di upload
-	photoURL, err := rt.simulateFileUpload(convID, fileHeader.Filename) 
+	photoURL, err := rt.simulateFileUpload(convID, userID, fileHeader.Filename)  
 	if err != nil {
 		ctx.Logger.WithError(err).Error("Error saving file")
 		rt.writeJSON(w, http.StatusInternalServerError, nil)
@@ -175,19 +176,18 @@ func (rt *_router) setGroupPhoto(w http.ResponseWriter, r *http.Request, ps http
 	}
 
 	// 6. Aggiorna l'URL della foto del gruppo nel database
-	// SetGroupPhotoURL deve anche verificare se l'utente è un admin (o avere permessi sufficienti)
-	if err := rt.db.SetGroupPhotoURL(convID, userID, photoURL); err != nil {
-		if errors.Is(err, database.AppErrorUserNotMember) {
-			rt.writeJSON(w, http.StatusForbidden, nil) // 403 Forbidden
-			return
-		}
-		if errors.Is(err, database.AppErrorConversationNotFound) {
-			rt.writeJSON(w, http.StatusNotFound, nil) // 404 Not Found
-			return
-		}
-		ctx.Logger.WithError(err).Error("Database error during SetGroupPhotoURL")
-		rt.writeJSON(w, http.StatusInternalServerError, nil)
-		return
+	if err := rt.db.SetConversationPhotoURL(convID, userID, photoURL); err != nil {
+    	if errors.Is(err, database.AppErrorUserNotMember) { // Ora 'database' è definito
+        	rt.writeJSON(w, http.StatusForbidden, nil) // 403 Forbidden
+        	return
+    	}
+    	if errors.Is(err, database.AppErrorConversationNotFound) { // Ora 'database' è definito
+        	rt.writeJSON(w, http.StatusNotFound, nil) // 404 Not Found
+        	return
+    	}
+    	ctx.Logger.WithError(err).Error("Database error during SetGroupPhotoURL")
+    	rt.writeJSON(w, http.StatusInternalServerError, nil)
+    	return
 	}
 
 	// 7. Successo: 200 OK
@@ -206,7 +206,7 @@ func (rt *_router) addToGroup(w http.ResponseWriter, r *http.Request, ps httprou
 	}
 
 	var req addMembersRequest
-	if err := rt.decodeJSON(r, &req); err != nil {
+	if err := rt.decodeJSON(w, r, &req); err != nil {
 		rt.writeJSON(w, http.StatusBadRequest, nil)
 		return
 	}
