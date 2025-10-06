@@ -1,26 +1,3 @@
-/*
-Webapi is the executable for the main web server.
-It builds a web server around APIs from `service/api`.
-Webapi connects to external resources needed (database) and starts two web servers: the API web server, and the debug.
-Everything is served via the API web server, except debug variables (/debug/vars) and profiler infos (pprof).
-
-Usage:
-
-	webapi [flags]
-
-Flags and configurations are handled automatically by the code in `load-configuration.go`.
-
-Return values (exit codes):
-
-	0
-		The program ended successfully (no errors, stopped by signal)
-
-	> 0
-		The program ended due to an error
-
-Note that this program will update the schema of the database to the latest version available (embedded in the
-executable during the build).
-*/
 package main
 
 import (
@@ -29,13 +6,12 @@ import (
 	"errors"
 	"fmt"
 	
-
-    "github.com/pioloLlanos/Wasa/service/api"
-    "github.com/pioloLlanos/Wasa/service/database"
-    "github.com/pioloLlanos/Wasa/service/globaltime"
+	_ "github.com/mattn/go-sqlite3" // 👈 Driver importato correttamente con underscore
+	"github.com/pioloLlanos/Wasa/service/api"
+	"github.com/pioloLlanos/Wasa/service/database"
+	"github.com/pioloLlanos/Wasa/service/globaltime"
 
 	"github.com/ardanlabs/conf"
-	"github.com/mattn/go-sqlite3"
 	"github.com/sirupsen/logrus"
 	"math/rand"
 	"net/http"
