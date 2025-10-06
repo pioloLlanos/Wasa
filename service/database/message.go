@@ -15,6 +15,32 @@ func (db *appdbimpl) CreateMessage(convID uint64, senderID uint64, content strin
     return 0, fmt.Errorf("funzione omessa per brevità, la firma è stata corretta con replyToID (%d) e isPhoto (%t)", replyToID, isPhoto)
 }
 
+// CreateMessageWithPhoto crea e salva un nuovo messaggio contenente una foto nel database.
+func (db *appdbimpl) CreateMessageWithPhoto(convID uint64, senderID uint64, url string) (uint64, error) {
+	// Questo è un helper che chiama CreateMessage, impostando 'isPhoto' a true 
+    // e usa l'URL come contenuto del messaggio.
+	
+	// Il terzo argomento è l'ID del messaggio a cui si risponde. Qui usiamo 0 
+    // assumendo che una foto non sia una risposta (se la tua API lo supporta, modificalo).
+    // L'ultimo argomento è 'isPhoto' (true).
+    
+    // ⚠️ Nota: Qui stiamo riutilizzando CreateMessage con i flag corretti (isPhoto=true, replyToID=0).
+    // Assicurati che il tuo campo 'content' o 'url' nella tabella 'messages' possa
+    // contenere l'URL della foto.
+    
+    // Se la tua implementazione di CreateMessage gestisce bene i nuovi parametri, 
+    // puoi chiamarla direttamente:
+    messageID, err := db.CreateMessage(convID, senderID, url, 0, true) 
+    
+    if err != nil {
+        // Se CreateMessage ritorna un errore di membro non trovato, ripassalo.
+        return 0, err
+    }
+    
+    return messageID, nil
+}
+
+
 // DeleteMessage cancella un messaggio, ma solo se l'utente che lo invoca è il mittente.
 func (db *appdbimpl) DeleteMessage(msgID uint64, userID uint64) error {
     res, err := db.c.Exec("DELETE FROM messages WHERE id = ? AND sender_id = ?", msgID, userID)
