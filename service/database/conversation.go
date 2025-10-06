@@ -419,3 +419,89 @@ func (db *appdbimpl) CreateOrGetPrivateConversation(user1ID, user2ID uint64) (ui
 
     return convID, nil
 }
+
+
+// GetConversationAndMessages recupera i dettagli di una conversazione e i messaggi recenti,
+// verificando che l'utente sia un membro.
+func (db *appdbimpl) GetConversationAndMessages(convID, userID uint64) (Conversation, []Message, error) {
+    // 1. Verifica che l'utente sia membro della conversazione
+    var isMember int
+    err := db.c.QueryRow("SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?",
+        convID, userID).Scan(&isMember)
+    
+    if errors.Is(err, sql.ErrNoRows) {
+        // Se l'utente non è membro, restituisci l'errore specifico (utilizzato dall'API)
+        return Conversation{}, nil, AppErrorUserNotMember
+    }
+    if err != nil {
+        return Conversation{}, nil, fmt.Errorf("errore nel controllo membership: %w", err)
+    }
+
+    // 2. Recupera i dettagli della conversazione
+    var conversation Conversation
+    var isGroupInt int
+    var lastMessageID sql.NullInt64 // Usa NullInt64 per i campi NULLable
+    
+    // Assicurati che il modello Conversation sia stato aggiornato per includere tutti i campi
+    err = db.c.QueryRow(`
+        SELECT id, name, is_group, last_message_id, photo_url
+        FROM conversations 
+        WHERE id = ?
+    `, convID).Scan(&conversation.ID, &conversation.Name, &isGroupInt, &lastMessageID, &conversation.PhotoURL)
+
+    if errors.Is(err, sql.ErrNoRows) {
+        return Conversation{}, nil, AppErrorConversationNotFound
+    }
+    if err != nil {
+        return Conversation{}, nil, fmt.Errorf("errore nel recupero conversazione: %w", err)
+    }
+
+    conversation.IsGroup = isGroupInt != 0
+    if lastMessageID.Valid {
+        conversation.LastMessageID = uint64(lastMessageID.Int64)
+    }
+    // Nota: I dati dei membri e l'ultimo messaggio non sono inclusi qui per brevità, 
+    // ma dovrebbero essere recuperati separatamente per riempire l'oggetto Conversation se necessario.
+
+    // 3. Recupera gli ultimi 50 messaggi (o un limite ragionevole)
+    rows, err := db.c.Query(`
+        SELECT id, conversation_id, sender_id, content, timestamp, reply_to_id, is_photo
+        FROM messages
+        WHERE conversation_id = ?
+        ORDER BY timestamp DESC
+        LIMIT 50
+    `, convID)
+    
+    if err != nil {
+        return Conversation{}, nil, fmt.Errorf("errore nel recupero messaggi: %w", err)
+    }
+    defer rows.Close()
+
+    var messages []Message
+    for rows.Next() {
+        var msg Message
+        var replyToID sql.NullInt64
+        var isPhotoInt int
+        
+        // Assicurati che il modello Message sia aggiornato
+        if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.Content, &msg.Timestamp, &replyToID, &isPhotoInt); err != nil {
+            return Conversation{}, nil, fmt.Errorf("errore nella scansione del messaggio: %w", err)
+        }
+        
+        if replyToID.Valid {
+            msg.ReplyToID = uint64(replyToID.Int64)
+        }
+        msg.IsPhoto = isPhotoInt != 0
+        messages = append(messages, msg)
+    }
+    if err := rows.Err(); err != nil {
+        return Conversation{}, nil, fmt.Errorf("errore dopo l'iterazione dei messaggi: %w", err)
+    }
+    
+    // 4. Inverti l'ordine dei messaggi per averli dal più vecchio al più recente
+    for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+        messages[i], messages[j] = messages[j], messages[i]
+    }
+    
+    return conversation, messages, nil
+}
