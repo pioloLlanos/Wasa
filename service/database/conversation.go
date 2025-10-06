@@ -349,3 +349,73 @@ func (db *appdbimpl) RemoveMemberFromConversation(convID uint64, removerID uint6
 	}
 	return nil
 }
+
+
+
+// CreateOrGetPrivateConversation crea una nuova conversazione privata tra due utenti se non esiste,
+// altrimenti restituisce l'ID della conversazione esistente.
+func (db *appdbimpl) CreateOrGetPrivateConversation(user1ID, user2ID uint64) (uint64, error) {
+    // 1. Ordina gli ID per garantire l'unicità nella ricerca e nell'eventuale creazione.
+    if user1ID > user2ID {
+        user1ID, user2ID = user2ID, user1ID
+    }
+
+    var convID uint64
+    // 2. Prova a trovare la conversazione esistente (conversazione non di gruppo con i due membri)
+    err := db.c.QueryRow(`
+        SELECT T1.conversation_id
+        FROM conversation_members AS T1
+        JOIN conversation_members AS T2 ON T1.conversation_id = T2.conversation_id
+        JOIN conversations AS C ON T1.conversation_id = C.id
+        WHERE T1.user_id = ? AND T2.user_id = ? AND C.is_group = 0
+    `, user1ID, user2ID).Scan(&convID)
+
+    if err == nil {
+        return convID, nil // Conversazione trovata
+    }
+    
+    if !errors.Is(err, sql.ErrNoRows) {
+        return 0, fmt.Errorf("errore nel controllo conversazione esistente: %w", err)
+    }
+
+    // 3. Conversazione non trovata: creala.
+    
+    tx, err := db.c.Begin()
+    if err != nil {
+        return 0, fmt.Errorf("impossibile avviare la transazione: %w", err)
+    }
+    
+    // Inserisci la nuova conversazione come non-gruppo (is_group = 0)
+    res, err := tx.Exec("INSERT INTO conversations (is_group) VALUES (0)")
+    if err != nil {
+        _ = tx.Rollback()
+        return 0, fmt.Errorf("impossibile creare la conversazione: %w", err)
+    }
+    
+    lastInsertId, err := res.LastInsertId()
+    if err != nil {
+        _ = tx.Rollback()
+        return 0, fmt.Errorf("impossibile ottenere l'ID della conversazione: %w", err)
+    }
+    convID = uint64(lastInsertId)
+
+    // Aggiungi i due membri (is_admin = 0 nelle 1:1)
+    _, err = tx.Exec("INSERT INTO conversation_members (conversation_id, user_id, is_admin) VALUES (?, ?, 0)", convID, user1ID)
+    if err != nil {
+        _ = tx.Rollback()
+        return 0, fmt.Errorf("impossibile aggiungere il primo membro: %w", err)
+    }
+    
+    _, err = tx.Exec("INSERT INTO conversation_members (conversation_id, user_id, is_admin) VALUES (?, ?, 0)", convID, user2ID)
+    if err != nil {
+        _ = tx.Rollback()
+        return 0, fmt.Errorf("impossibile aggiungere il secondo membro: %w", err)
+    }
+    
+    // Commit
+    if err = tx.Commit(); err != nil {
+        return 0, fmt.Errorf("impossibile fare il commit della transazione: %w", err)
+    }
+
+    return convID, nil
+}
