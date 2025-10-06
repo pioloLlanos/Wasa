@@ -50,8 +50,8 @@ func (db *appdbimpl) CheckUserExists(id uint64) error {
     return nil
 }
 
-// SetUserName aggiorna il nome di un utente esistente.
-func (db *appdbimpl) SetUserName(id uint64, newName string) error {
+// SetMyUserName aggiorna il nome di un utente esistente.
+func (db *appdbimpl) SetMyUserName(id uint64, newName string) error {
     // ... (Implementazione omessa per brevità, è corretta) ...
     res, err := db.c.Exec("UPDATE users SET name = ? WHERE id = ?", newName, id)
     if err != nil {
