@@ -305,14 +305,56 @@ func (db *appdbimpl) SetConversationPhotoURL(convID uint64, adminID uint64, url 
 	return err
 }
 
-// AddMemberToConversation aggiunge un utente a un gruppo (solo se l'adminID è admin).
-func (db *appdbimpl) AddMemberToConversation(convID uint64, adminID uint64, targetUserID uint64) error {
-	if err := db.checkAdminStatus(convID, adminID); err != nil {
-		return err
+// AddMembersToConversation aggiunge nuovi utenti (newMemberIDs) a un gruppo (convID)
+// solo se l'utente chiamante (adminID) è un amministratore.
+func (db *appdbimpl) AddMembersToConversation(convID uint64, adminID uint64, newMemberIDs []uint64) error {
+	if len(newMemberIDs) == 0 {
+		return nil // Niente da fare
 	}
 
-	// Inserisce il nuovo membro. Se il membro è già presente, la PK (conversation_id, user_id) fallirà in silenzio.
-	_, err := db.c.Exec("INSERT INTO conversation_members (conversation_id, user_id, is_admin) VALUES (?, ?, 0)", convID, targetUserID)
+	// 1. Verifica i permessi di amministratore
+	isAdmin, err := db.checkAdminStatus(convID, adminID)
+	if err != nil {
+		return fmt.Errorf("errore nella verifica admin: %w", err)
+	}
+	if !isAdmin {
+		// Non ho trovato l'errore AppErrorNotAdmin, uso AppErrorUserNotMember che è già definito
+		return AppErrorUserNotMember
+	}
+
+	// 2. Inizia la transazione per garantire l'atomicità
+	tx, err := db.c.Begin()
+	if err != nil {
+		return fmt.Errorf("impossibile iniziare la transazione: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else {
+			_ = tx.Commit()
+		}
+	}()
+
+	// 3. Prepara l'istruzione INSERT
+	stmt, err := tx.Prepare("INSERT INTO conversation_members (conversation_id, user_id, is_admin) VALUES (?, ?, 0)")
+	if err != nil {
+		return fmt.Errorf("errore nella preparazione statement: %w", err)
+	}
+	defer stmt.Close()
+
+	// 4. Esegui l'INSERT per ogni nuovo membro
+	for _, memberID := range newMemberIDs {
+		_, err := stmt.Exec(convID, memberID)
+		if err != nil {
+			// Gestione specifica per i membri che sono già nel gruppo (UNIQUE constraint failed)
+			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				// Ignora l'errore se l'utente è già membro
+				continue
+			}
+			return fmt.Errorf("errore nell'inserimento del membro %d: %w", memberID, err)
+		}
+	}
+
 	return err
 }
 
