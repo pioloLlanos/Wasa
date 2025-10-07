@@ -1,11 +1,10 @@
 package api
 
-import (
-	"net/http"
-)
-
-// Handler returns an instance of httprouter.Router that handle APIs registered here
-func (rt *_router) Handler() http.Handler {
+// routes registra tutti gli endpoint HTTP per l'API (Logica di routing).
+// Questo metodo è chiamato da rt.Handler() in api.go per popolare il router.
+func (rt *_router) routes() {
+	// 0. Liveness Check (NON WRAPPED)
+	rt.router.GET("/liveness", rt.liveness)
 
 	// 1. LOGIN (NON WRAPPED) - Gestisce la creazione di sessione/login
 	rt.router.POST("/session", rt.doLogin)
@@ -29,14 +28,9 @@ func (rt *_router) Handler() http.Handler {
 
 	// 5. GRUPPI (WRAPPED) - Gestisce la creazione e la modifica dei gruppi
 	rt.router.POST("/groups", rt.wrap(rt.createGroup))                         // Crea un nuovo gruppo
-	rt.router.GET("/groups/:groupId", rt.wrap(rt.getGroupDetails))             // 👈 AGGIUNTO: Ottiene i dettagli del gruppo
+	rt.router.GET("/groups/:groupId", rt.wrap(rt.getGroupDetails))             // Ottiene i dettagli del gruppo
 	rt.router.PUT("/groups/:groupId/name", rt.wrap(rt.setGroupName))           // Modifica il nome del gruppo
 	rt.router.PUT("/groups/:groupId/photo", rt.wrap(rt.setGroupPhoto))         // Modifica la foto del gruppo
 	rt.router.POST("/groups/:groupId/members", rt.wrap(rt.addToGroup))         // Aggiunge un membro al gruppo
 	rt.router.DELETE("/groups/:groupId/members/:userId", rt.wrap(rt.leaveGroup)) // Rimuove/Abbandona il gruppo
-
-	// Special routes (LIVENESS) - Rotta per il controllo di stato dell'applicazione
-	rt.router.GET("/liveness", rt.liveness)
-
-	return rt.handleCORS(rt.router)
 }

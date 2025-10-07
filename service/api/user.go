@@ -1,125 +1,157 @@
-package api
+package database
 
 import (
-	"database/sql" // Necessario per sql.ErrNoRows in setMyPhoto
+	"database/sql"
 	"errors"
-	"net/http"
-
-	// Percorsi corretti
-	"github.com/julienschmidt/httprouter"
-	"github.com/pioloLlanos/Wasa/service/api/reqcontext"
-	"github.com/pioloLlanos/Wasa/service/database"
+	"fmt"
 )
 
-// setUserNameRequest è la struttura per deserializzare il body della richiesta PUT /me/name
-type setUserNameRequest struct {
-	NewName string `json:"name"` // Il campo corretto da OpenAPI (assumo)
-}
-
-// setMyUserName implementa l'handler PUT /me/name per aggiornare il nome utente
-func (rt *_router) setMyUserName(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
-	userID := ctx.UserID
-
-	// 1. Leggi il body della richiesta
-	var req setUserNameRequest
-	// Usa rt.decodeJSON con 'w' come primo argomento
-	if err := rt.decodeJSON(w, r, &req); err != nil {
-		rt.writeJSON(w, http.StatusBadRequest, nil)
-		return
+// CreateUser crea un nuovo utente nel database.
+// Restituisce l'ID del nuovo utente o un errore se il nome è già in uso.
+func (db *appdbimpl) CreateUser(name string) (uint64, error) {
+	// Verifica prima se il nome è già in uso.
+	// Se la query trova una riga, GetUserByName restituirà l'ID senza errori.
+	// Se GetUserByName ha successo, significa che il nome è già preso.
+	if _, err := db.GetUserByName(name); err == nil {
+		return 0, AppErrorNomeGiaInUso
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		// Se l'errore non è ErrNoRows (ovvero, un errore inaspettato del DB), lo restituiamo.
+		return 0, fmt.Errorf("error checking existing user: %w", err)
 	}
 
-	// 2. Validazione: il nome non deve essere vuoto
-	if req.NewName == "" {
-		rt.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Il nome non può essere vuoto"})
-		return
-	}
-
-	// 3. Logica di business: Aggiorna il nome nel database
-	if err := rt.db.SetMyUserName(userID, req.NewName); err != nil {
-		if errors.Is(err, database.AppErrorNomeGiaInUso) {
-			rt.writeJSON(w, http.StatusConflict, map[string]string{"error": "Nome utente già in uso"})
-			return
-		}
+	// Inserisce il nuovo utente.
+	res, err := db.c.Exec(`INSERT INTO users (Name) VALUES (?)`, name)
+	if err != nil {
+		// In teoria la verifica precedente copre questo caso, ma teniamo per sicurezza.
 		if errors.Is(err, sql.ErrNoRows) {
-			rt.writeJSON(w, http.StatusNotFound, nil)
-			return
+			return 0, AppErrorNomeGiaInUso
 		}
-		ctx.Logger.WithError(err).Error("Database error during SetMyUserName")
-		rt.writeJSON(w, http.StatusInternalServerError, nil)
-		return
+		return 0, fmt.Errorf("error creating user: %w", err)
 	}
 
-	// 4. Successo: 204 No Content
-	w.WriteHeader(http.StatusNoContent)
+	// Ottiene l'ID dell'utente appena creato.
+	lastInsertID, err := res.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("error getting last insert ID: %w", err)
+	}
+
+	return uint64(lastInsertID), nil
 }
 
-// setMyPhoto implementa l'handler PUT /me/photo per aggiornare la foto profilo
-func (rt *_router) setMyPhoto(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
-	userID := ctx.UserID
+// GetUserByName recupera l'ID di un utente dato il suo nome.
+// Restituisce sql.ErrNoRows se l'utente non è trovato.
+func (db *appdbimpl) GetUserByName(name string) (uint64, error) {
+	var userID uint64
 
-	// 1. Parsa il Form Multipart (limite a 5MB per la foto)
-	err := r.ParseMultipartForm(5 << 20) // 5MB limit
+	// Esegui la query per selezionare l'ID in base al nome.
+	err := db.c.QueryRow(`SELECT ID FROM users WHERE Name = ?`, name).Scan(&userID)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		// User not found (expected during initial registration attempt)
+		return 0, sql.ErrNoRows
+	}
+
 	if err != nil {
-		rt.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Errore nel parsing del form. Max 5MB"})
-		return
+		// Unexpected database error
+		return 0, fmt.Errorf("error fetching user by name: %w", err)
 	}
 
-	// 2. Estrai il file "image"
-	file, fileHeader, err := r.FormFile("image")
-	if err != nil {
-		if errors.Is(err, http.ErrMissingFile) {
-			rt.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Il campo 'image' è richiesto"})
-			return
-		}
-		rt.writeJSON(w, http.StatusInternalServerError, nil)
-		return
-	}
-	defer file.Close()
-
-	// 3. Logica di upload e aggiornamento URL
-	// CORREZIONE: rt.simulateFileUpload richiede 3 argomenti: (convID, userID, filename).
-	photoURL, err := rt.simulateFileUpload(0, userID, fileHeader.Filename)
-	if err != nil {
-		ctx.Logger.WithError(err).Error("Error saving file")
-		rt.writeJSON(w, http.StatusInternalServerError, nil)
-		return
-	}
-
-	// 4. Aggiorna l'URL della foto nel database
-	if err := rt.db.SetUserPhotoURL(userID, photoURL); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			rt.writeJSON(w, http.StatusNotFound, nil)
-			return
-		}
-		ctx.Logger.WithError(err).Error("Database error during SetUserPhotoURL")
-		rt.writeJSON(w, http.StatusInternalServerError, nil)
-		return
-	}
-
-	// 5. Successo: 200 OK
-	w.WriteHeader(http.StatusOK)
+	return userID, nil
 }
 
-// searchUsers implementa l'handler GET /users/search
-func (rt *_router) searchUsers(w http.ResponseWriter, r *http.Request, ps httprouter.Params, ctx reqcontext.RequestContext) {
-	// 1. Ottieni il parametro di query "name" (query string)
-	query := r.URL.Query().Get("name")
-
-	if query == "" {
-		// Se la query è vuota, restituisce 400 Bad Request
-		rt.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Il parametro di ricerca 'name' è richiesto."})
-		return
-	}
-
-	// 2. Logica di business: Cerca gli utenti nel database
-	users, err := rt.db.SearchUsers(query)
+// CheckUserExists verifica se un utente con l'ID specificato esiste.
+// Usato dal middleware di autenticazione.
+func (db *appdbimpl) CheckUserExists(id uint64) error {
+	var exists bool
+	err := db.c.QueryRow(`SELECT EXISTS(SELECT 1 FROM users WHERE ID = ?)`, id).Scan(&exists)
 
 	if err != nil {
-		ctx.Logger.WithError(err).Error("Database error during SearchUsers")
-		rt.writeJSON(w, http.StatusInternalServerError, nil)
-		return
+		return fmt.Errorf("error checking user existence: %w", err)
 	}
 
-	// 3. Successo: 200 OK con la lista di utenti
-	rt.writeJSON(w, http.StatusOK, users)
+	if !exists {
+		return sql.ErrNoRows // Usiamo sql.ErrNoRows come segnale di "non trovato"
+	}
+
+	return nil
+}
+
+// SetMyUserName implementa l'aggiornamento del nome utente.
+func (db *appdbimpl) SetMyUserName(id uint64, name string) error {
+	// 1. Verifica se il nuovo nome è già in uso da un altro utente
+	existingID, err := db.GetUserByName(name)
+	if err == nil && existingID != id {
+		return AppErrorNomeGiaInUso
+	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("error checking name availability: %w", err)
+	}
+
+	// 2. Aggiorna il nome
+	res, err := db.c.Exec(`UPDATE users SET Name = ? WHERE ID = ?`, name, id)
+	if err != nil {
+		return fmt.Errorf("error updating user name: %w", err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error checking rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return sql.ErrNoRows // Nessun utente trovato con quell'ID
+	}
+
+	return nil
+}
+
+// SetUserPhotoURL implementa l'aggiornamento dell'URL della foto profilo.
+func (db *appdbimpl) SetUserPhotoURL(id uint64, url string) error {
+	res, err := db.c.Exec(`UPDATE users SET PhotoURL = ? WHERE ID = ?`, url, id)
+	if err != nil {
+		return fmt.Errorf("error updating user photo URL: %w", err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error checking rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return sql.ErrNoRows // Nessun utente trovato con quell'ID
+	}
+
+	return nil
+}
+
+// SearchUsers implementa la ricerca di utenti in base al nome.
+// Restituisce una lista di oggetti User.
+func (db *appdbimpl) SearchUsers(query string) ([]User, error) {
+	// Aggiunge i caratteri jolly SQL per la ricerca LIKE
+	searchPattern := fmt.Sprintf("%%%s%%", query)
+
+	rows, err := db.c.Query(
+		`SELECT ID, Name, PhotoURL FROM users WHERE Name LIKE ? LIMIT 20`, // Limita i risultati per performance
+		searchPattern,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error executing user search query: %w", err)
+	}
+	// Garantisce che la risorsa sia rilasciata
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Name, &u.PhotoURL); err != nil {
+			return nil, fmt.Errorf("error scanning user search result: %w", err)
+		}
+		users = append(users, u)
+	}
+
+	// Controlla gli errori che possono essersi verificati durante l'iterazione
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over user search results: %w", err)
+	}
+
+	return users, nil
 }
