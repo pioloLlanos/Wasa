@@ -1,3 +1,9 @@
+/*
+Package reqcontext contains the request context. Each request will have its own instance of RequestContext filled by the
+middleware code in the api-context-wrapper.go (parent package).
+
+Each value here should be assumed valid only per request only, with some exceptions like the logger.
+*/
 package reqcontext
 
 import (
@@ -12,7 +18,4 @@ type RequestContext struct {
 
 	// Logger is a custom field logger for the request
 	Logger logrus.FieldLogger
-
-	// UserID è l'identificatore dell'utente autenticato (Aggiunto per l'autenticazione)
-	UserID uint64 // 👈 QUESTO È IL CAMPO MANCANTE
 }

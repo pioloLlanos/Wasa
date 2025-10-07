@@ -1,24 +1,18 @@
 package api
 
 import (
-	"net/http"
-	"strconv"
-	"strings"
-
+	"git.sapienzaapps.it/fantasticcoffee/fantastic-coffee-decaffeinated/service/api/reqcontext"
 	"github.com/gofrs/uuid"
 	"github.com/julienschmidt/httprouter"
 	"github.com/sirupsen/logrus"
-
-	// 👈 CORREZIONE: Aggiunto l'underscore per risolvere l'errore "imported and not used"
-	_ "github.com/pioloLlanos/Wasa/service/database"
-	"github.com/pioloLlanos/Wasa/service/api/reqcontext" 
+	"net/http"
 )
 
-// httpRouterHandler è la firma per le funzioni che accettano un reqcontext.RequestContext in aggiunta a quelli
-// richiesti dal pacchetto httprouter.
+// httpRouterHandler is the signature for functions that accepts a reqcontext.RequestContext in addition to those
+// required by the httprouter package.
 type httpRouterHandler func(http.ResponseWriter, *http.Request, httprouter.Params, reqcontext.RequestContext)
 
-// wrap implementa il middleware di logging e AUTENTICAZIONE.
+// wrap parses the request and adds a reqcontext.RequestContext instance related to the request.
 func (rt *_router) wrap(fn httpRouterHandler) func(http.ResponseWriter, *http.Request, httprouter.Params) {
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		reqUUID, err := uuid.NewV4()
@@ -27,7 +21,6 @@ func (rt *_router) wrap(fn httpRouterHandler) func(http.ResponseWriter, *http.Re
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		// Assumiamo che reqcontext.RequestContext contenga un campo UserID uint64
 		var ctx = reqcontext.RequestContext{
 			ReqUUID: reqUUID,
 		}
@@ -38,40 +31,7 @@ func (rt *_router) wrap(fn httpRouterHandler) func(http.ResponseWriter, *http.Re
 			"remote-ip": r.RemoteAddr,
 		})
 
-		// ----------------------------------------------------
-		// LOGICA DI AUTENTICAZIONE
-		// ----------------------------------------------------
-
-		authHeader := r.Header.Get("Authorization")
-
-		// 1. Check header
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		// 2. Extract token
-		tokenString := authHeader[len("Bearer "):]
-
-		// 3. Convert ID
-		userID, err := strconv.ParseUint(tokenString, 10, 64)
-		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		// 4. Check existence in DB
-		if err := rt.db.CheckUserExists(userID); err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		// 5. Inject ID into context
-		ctx.UserID = userID // 👈 Necessita del campo UserID in reqcontext.RequestContext
-
-		// ----------------------------------------------------
-
-		// Call the next handler in chain
+		// Call the next handler in chain (usually, the handler function for the path)
 		fn(w, r, ps, ctx)
 	}
 }
