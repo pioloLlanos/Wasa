@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: WASAText API
   version: '1.0'
-  description: |-
+  description: |
     API per l'applicazione WASAText che consente di chattare con le persone o gruppi di persone.
     Gli endpoint che agiscono sull'utente autenticato (es. setMyUserName, setMyPhoto)
     non richiedono un User ID nel percorso, poiché l'identificativo viene estratto
@@ -86,12 +86,14 @@ paths:
         content:
           image/png:
             schema:
-              $ref: '#/components/schemas/Base64Image'
-              minLength: 1
+              allOf:
+                - $ref: '#/components/schemas/Base64Image'
+                - minLength: 1
           image/jpeg:
             schema:
-              $ref: '#/components/schemas/Base64Image'
-              minLength: 1
+              allOf:
+                - $ref: '#/components/schemas/Base64Image'
+                - minLength: 1
       responses:
         "200":
           description: Photo changed successfully, returns the updated User object
@@ -221,9 +223,9 @@ paths:
                   minLength: 1
                   maxLength: 1000
                 attachment:
-                  $ref: "#/components/schemas/Base64Image"
-                  description: Allegato immagine opzionale (stringa Base64).
-                  minLength: 0
+                  allOf:
+                    - $ref: "#/components/schemas/Base64Image"
+                    - description: Allegato immagine opzionale (stringa Base64).
                 replyTo:
                   $ref: "#/components/schemas/Id"
                   description: L'ID del messaggio a cui si sta rispondendo (opzionale).
@@ -234,8 +236,10 @@ paths:
                   default: false
                   nullable: true
               oneOf:
-                - required: [content]
-                - required: [attachment]
+                - type: object
+                  required: [content]
+                - type: object
+                  required: [attachment]
       responses:
         "200":
           description: Message sent successfully
@@ -367,9 +371,10 @@ paths:
                   minLength: 2
                   maxLength: 1000
                 image:
-                  $ref: "#/components/schemas/Base64Image"
-                  description: Group image (Base64 encoded string).
-                  minLength: 1
+                  allOf:
+                    - $ref: "#/components/schemas/Base64Image"
+                    - description: Group image (Base64 encoded string).
+                    - minLength: 1
               required:
                 - name
                 - membersJson
@@ -423,12 +428,14 @@ paths:
         content:
           image/png:
             schema:
-              $ref: '#/components/schemas/Base64Image'
-              minLength: 1
+              allOf:
+                - $ref: '#/components/schemas/Base64Image'
+                - minLength: 1
           image/jpeg:
             schema:
-              $ref: '#/components/schemas/Base64Image'
-              minLength: 1
+              allOf:
+                - $ref: '#/components/schemas/Base64Image'
+                - minLength: 1
       responses:
         "200":
           description: Photo changed successfully, returns the updated Group object
@@ -517,8 +524,9 @@ components:
         name:
           $ref: "#/components/schemas/Name"
         photo:
-          $ref: "#/components/schemas/Base64Image"
-          minLength: 1
+          allOf:
+            - $ref: "#/components/schemas/Base64Image"
+            - minLength: 1
     LoginResponse:
       type: object
       description: Response schema for user login.
@@ -635,6 +643,10 @@ components:
               userId:
                 $ref: "#/components/schemas/Id"
           maxItems: 20
+        reactions:
+          allOf:
+            - $ref: "#/components/schemas/ReactionsArray"
+            - description: List of reactions to the message.
       required:
         - id
         - state
@@ -645,6 +657,22 @@ components:
         - attachment
         - isForwarded
         - reactions
+    ReactionsArray:
+      type: array
+      items:
+        type: object
+        description: A single reaction with emoji and user ID.
+        properties:
+          emoji:
+            $ref: "#/components/schemas/Reaction"
+          userId:
+            $ref: "#/components/schemas/Id"
+          required:
+            - emoji
+            - userId
+      maxItems: 20
+      minItems: 0
+
     Conversation:
       title: Conversation
       description: Represents a summary of a single conversation.
